@@ -118,9 +118,10 @@ class OutlineFont(Texture):
       except TypeError:
         ch = i
 
-      chwidth, chheight = imgfont.getsize(ch)
-      chwidth += s_inc
-      chheight += s_inc
+      # Use getbbox() instead of deprecated getsize()
+      bbox = imgfont.getbbox(ch)
+      chwidth = bbox[2] - bbox[0] + s_inc
+      chheight = bbox[3] - bbox[1] + s_inc
 
       if (curX + chwidth) > self.ix:
           curX = 0
