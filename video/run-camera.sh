@@ -7,5 +7,5 @@ FPS=$(python3 -c 'import config; print(getattr(config,"video_fps",25))' 2>/dev/n
 
 mkdir -p "$REPLAY_PATH/fragments"
 exec rpicam-vid --codec h264 --width "$W" --height "$H" --framerate "$FPS" --inline \
-  --segment 4000 --output "$REPLAY_PATH/fragments/out%05d.h264" --timeout 0
+  --nopreview --segment 4000 --output "$REPLAY_PATH/fragments/out%05d.h264" --timeout 0
 
