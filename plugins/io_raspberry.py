@@ -42,9 +42,8 @@ class GoalDetector:
         self.pin = pin_number
         self.team = team
         if self.pin:
-            #GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_DOWN)
-            GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-            GPIO.add_event_detect(self.pin, GPIO.FALLING, callback=self.on_goal, bouncetime=10)
+            GPIO.setup(self.pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            GPIO.add_event_detect(self.pin, GPIO.FALLING, callback=self.on_goal, bouncetime=300)
         else:
             logger.warn("Cannot init GoalDetector {0}, pin not specified".format(self.team))
     def __del__(self):
@@ -71,7 +70,7 @@ class IRBarrierPwmGenerator:
   
 class Plugin(IOBase):
     def __init__(self, bus):
-        GPIO.setmode(GPIO.BOARD)
+        GPIO.setmode(GPIO.BCM)
         
         self.goal_pin_black = config.io_raspberry_pins["irbarrier_team_black"]
         self.goal_pin_yellow = config.io_raspberry_pins["irbarrier_team_yellow"]
@@ -84,9 +83,9 @@ class Plugin(IOBase):
         self.black_plus_pin = config.io_raspberry_pins["black_plus"]
         self.black_minus_pin = config.io_raspberry_pins["black_minus"]
         
-        self.ir_barrier_pwm = IRBarrierPwmGenerator()
-
-        time.sleep(0.5)   # let the PWM really start before starting detectors
+        # IR Barrier PWM disabled for button-based goal detection
+        # self.ir_barrier_pwm = IRBarrierPwmGenerator()
+        # time.sleep(0.5)   # let the PWM really start before starting detectors
             
         self.goal_detector_black = GoalDetector(bus, self.goal_pin_black, "black")
         self.goal_detector_yellow = GoalDetector(bus, self.goal_pin_yellow, "yellow")
