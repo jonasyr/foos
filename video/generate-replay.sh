@@ -1,30 +1,15 @@
-#!/bin/sh
-
-base_path=$1
-ignore_recent_chunks=$2
-long_chunks=$3
-short_chunks=$4
-fragments_path=$1/fragments
-
-short_replay_file=$base_path/replay_short.h264
-long_replay_file=$base_path/replay_long.h264
-
-
-long_fragments=`ls -tr $fragments_path/out*.h264 | head -n-$ignore_recent_chunks | tail -n$long_chunks`
-short_fragments=`echo "$long_fragments" | tail -n$short_chunks`
-
-generate_video() {
-  if [ -n "$fragments" ]; then
-    cat $fragments > $replay_file
-  fi
-}
-
-# generate short replay
-replay_file=$short_replay_file
-fragments=$short_fragments
-generate_video
-
-# generate long replay
-replay_file=$long_replay_file
-fragments=$long_fragments
-generate_video
+#!/usr/bin/env bash
+set -euo pipefail
+BASE="${1:-/dev/shm/replay}"; IGN="${2:-1}"; LONG="${3:-25}"; SHORT="${4:-10}"
+FR="$BASE/fragments"; mkdir -p "$BASE"
+mapfile -t ALL < <(ls -1t "$FR"/out*.h264 2>/dev/null || true)
+(( ${#ALL[@]} )) || { echo "No fragments"; exit 0; }
+# long
+cat "${ALL[@]:$IGN:$LONG}" > "$BASE/replay_long.h264" 2>/dev/null || true
+# short
+cat "${ALL[@]:$IGN:$SHORT}" > "$BASE/replay_short.h264" 2>/dev/null || true
+# Rewrap
+command -v ffmpeg &>/dev/null && \
+  [[ -f "$BASE/replay_short.h264" ]] && ffmpeg -y -framerate 25 -i "$BASE/replay_short.h264" -c copy "$BASE/replay_short.mp4" &>/dev/null
+command -v ffmpeg &>/dev/null && \
+  [[ -f "$BASE/replay_long.h264"  ]] && ffmpeg -y -framerate 25 -i "$BASE/replay_long.h264"  -c copy "$BASE/replay_long.mp4"  &>/dev/null

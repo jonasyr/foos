@@ -1,23 +1,11 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+REPLAY_PATH=$(python3 -c 'import config; print(getattr(config,"replay_path","/dev/shm/replay"))' 2>/dev/null || echo "/dev/shm/replay")
+W=$(python3 -c 'import config; print(getattr(config,"video_size",(1280,720))[0])' 2>/dev/null || echo 1280)
+H=$(python3 -c 'import config; print(getattr(config,"video_size",(1280,720))[1])' 2>/dev/null || echo 720)
+FPS=$(python3 -c 'import config; print(getattr(config,"video_fps",25))' 2>/dev/null || echo 25)
 
-function runcam {
-    base_path=$1
-    fragments_path=$base_path/fragments
-    w=$2
-    h=$3
-    fps=$4
-
-    shift 4
-    mkdir -p $fragments_path
-
-    exec /opt/vc/bin/raspivid -o $fragments_path/out%04d.h264 -x $fragments_path/mv%04d.txt -w $w -h $h -fps $fps -t 0 $@
-}
-
-pkill raspivid 2>/dev/null
-
-export PYTHONPATH=$(dirname $(dirname $0))
-
-GET_CONFIG="python3 -m foos.config_getter"
-
-runcam $($GET_CONFIG replay_path video_size video_fps camera_preview camera_chunk_settings camera_extra_params)
+mkdir -p "$REPLAY_PATH/fragments"
+exec rpicam-vid --codec h264 --width "$W" --height "$H" --framerate "$FPS" --inline \
+  --segment 4000 --output "$REPLAY_PATH/fragments/out%05d.h264" --timeout 0
 
