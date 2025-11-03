@@ -111,8 +111,13 @@ fi
 # ---- Python dependencies
 echo "→ Installing Python dependencies..."
 if [ -f requirements.txt ]; then
+  # Install from requirements.txt (will install broken RPi.GPIO 0.7.1)
   pip3 install --break-system-packages -r requirements.txt
-  # Ensure rpi-lgpio is installed (replacement for RPi.GPIO)
+  
+  # Remove the broken RPi.GPIO and install rpi-lgpio (provides compatible RPi.GPIO 0.7.2)
+  echo "  Replacing broken RPi.GPIO with rpi-lgpio..."
+  pip3 uninstall -y RPi.GPIO --break-system-packages 2>/dev/null || true
+  pip3 uninstall -y rpi-lgpio --break-system-packages 2>/dev/null || true
   pip3 install --break-system-packages rpi-lgpio
   echo "✓ Python dependencies installed"
 else
