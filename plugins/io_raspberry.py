@@ -16,6 +16,18 @@ class Plugin(IOBase):
         self.bus = bus
         self.pin_to_name = {}  # Map GPIO pin number to logical button name
         
+        # Clean up any previous GPIO state
+        try:
+            GPIO.setmode(GPIO.BCM)
+            # Remove any existing event detection on our pins
+            for pin in config.io_raspberry_pins.values():
+                try:
+                    GPIO.remove_event_detect(pin)
+                except:
+                    pass
+        except:
+            pass
+        
         # Set BCM numbering mode
         GPIO.setmode(GPIO.BCM)
         
@@ -28,17 +40,27 @@ class Plugin(IOBase):
         # Register +/- buttons with standard debounce (300ms)
         for name, pin in config.io_raspberry_pins.items():
             if name.endswith('_plus') or name.endswith('_minus'):
-                GPIO.add_event_detect(pin, GPIO.FALLING, 
-                                    callback=self._score_button_callback, 
-                                    bouncetime=300)
-                logger.info("Registered score button: %s (pin %d, debounce 300ms)", name, pin)
+                try:
+                    GPIO.add_event_detect(pin, GPIO.FALLING, 
+                                        callback=self._score_button_callback, 
+                                        bouncetime=300)
+                    logger.info("Registered score button: %s (pin %d, debounce 300ms)", name, pin)
+                except RuntimeError as e:
+                    # This shouldn't happen after cleanup, but log and re-raise
+                    logger.error("Failed to register pin %d (%s): %s", pin, name, e)
+                    raise
         
         # Register OK button with long-press detection (600ms debounce)
         ok_pin = config.io_raspberry_pins['ok_button']
-        GPIO.add_event_detect(ok_pin, GPIO.FALLING, 
-                            callback=self._ok_button_callback, 
-                            bouncetime=600)
-        logger.info("Registered OK button: pin %d (debounce 600ms, long-press enabled)", ok_pin)
+        try:
+            GPIO.add_event_detect(ok_pin, GPIO.FALLING, 
+                                callback=self._ok_button_callback, 
+                                bouncetime=600)
+            logger.info("Registered OK button: pin %d (debounce 600ms, long-press enabled)", ok_pin)
+        except RuntimeError as e:
+            # This shouldn't happen after cleanup, but log and re-raise
+            logger.error("Failed to register OK button pin %d: %s", ok_pin, e)
+            raise
         
         super().__init__(bus)
     
@@ -128,5 +150,16 @@ class Plugin(IOBase):
         while True:
             line = self.write_queue.get()
             time.sleep(1)
-
-        
+    
+    def __del__(self):
+        """Cleanup GPIO resources on plugin shutdown."""
+        try:
+            # Remove all event detection
+            for pin in config.io_raspberry_pins.values():
+                try:
+                    GPIO.remove_event_detect(pin)
+                except:
+                    pass
+            logger.info("GPIO cleanup completed")
+        except:
+            pass

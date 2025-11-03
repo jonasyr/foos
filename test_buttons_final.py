@@ -21,11 +21,17 @@ logger = logging.getLogger(__name__)
 class MockBus:
     def __init__(self):
         self.events = []
+        self.subscribers = {}
     
     def notify(self, event_type, data):
         """Capture bus events for verification."""
         self.events.append((event_type, data))
         logger.info("Bus event: %s - %s", event_type, data)
+    
+    def subscribe(self, callback, **kwargs):
+        """Mock subscribe method for compatibility with IOBase."""
+        # IOBase just subscribes a callback, no event_type specified
+        pass
 
 def main():
     logger.info("=" * 60)
