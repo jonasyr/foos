@@ -91,7 +91,7 @@ class Plugin:
         self.match = state['match']
         if self.match:
             self.update_players()
-            self.bus.notify("set_game_mode", {"mode": 5})
+            self.bus.notify("set_game_mode", {"mode": 10})
 
     def update_players(self):
         def pstring(ps):
@@ -115,7 +115,7 @@ class Plugin:
         self.match['start'] = int(time.time())
         self.current_game = 0
         self.bus.notify("reset_score")
-        self.bus.notify("set_game_mode", {"mode": 5})
+        self.bus.notify("set_game_mode", {"mode": 10})
         self.update_players()
 
     def win_game(self, data):
