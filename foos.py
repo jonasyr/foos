@@ -8,6 +8,10 @@ import sys
 import getopt
 import os
 
+# Ensure DISPLAY is set for pi3d (EGL/OpenGL context creation)
+if 'DISPLAY' not in os.environ:
+    os.environ['DISPLAY'] = ':0'
+
 from foos.platform import is_x11
 from foos.ui import ui
 from foos.bus import Bus

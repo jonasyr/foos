@@ -97,16 +97,21 @@ class Plugin(IOBase):
         }
         self.bus.notify('button_event', event_data)
         
-        # Emit goal event for +1 buttons (triggers scoring and replay)
+        # Handle score changes based on button action
         if action == 'plus':
+            # +1 buttons: trigger goal event (menu plugin will see the button_event above)
             logger.info("Goal for team %s!", team)
             self.bus.notify('goal_event', {'source': 'rpi', 'team': team})
+        elif action == 'minus':
+            # -1 buttons: decrement score (menu plugin will see the button_event above)
+            logger.info("Decrement score for team %s", team)
+            self.bus.notify('decrement_score', {'team': team})
     
     def _ok_button_callback(self, channel):
         """
         Handle OK button with long-press detection.
-        Short press (<0.9s): trigger short replay
-        Long press (≥0.9s): trigger long replay
+        Short press (<0.9s): Menu select/toggle
+        Long press (≥0.9s): Trigger long replay
         """
         # Prevent concurrent execution (ignore if already processing)
         if self.ok_button_processing:
@@ -131,25 +136,15 @@ class Plugin(IOBase):
             # Wait for button to be fully released and settle
             time.sleep(0.15)
             
-            # Determine replay type based on press duration
+            # Determine action based on press duration
             if press_duration >= 0.9:
-                replay_kind = 'long'
+                # Long press: trigger replay
                 logger.info("Long press detected (%.2fs) - triggering long replay", press_duration)
+                self.bus.notify('replay_request', {'kind': 'long'})
             else:
-                replay_kind = 'short'
-                logger.info("Short press detected (%.2fs) - triggering short replay", press_duration)
-            
-            # Emit button event
-            event_data = {
-                'source': 'rpi',
-                'btn': name,
-                'state': 'down',
-                'press_duration': press_duration
-            }
-            self.bus.notify('button_event', event_data)
-            
-            # Emit replay request
-            self.bus.notify('replay_request', {'kind': replay_kind})
+                # Short press: menu OK button (select/toggle menu)
+                logger.info("Short press detected (%.2fs) - menu OK", press_duration)
+                self.bus.notify('button_event', {'source': 'rpi', 'btn': 'ok', 'state': 'down'})
             
         finally:
             # Always release the lock

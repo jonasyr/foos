@@ -24,8 +24,10 @@ class Plugin:
         """Handle bus events - specifically looking for replay_request."""
         # event is an Event object with .name and .data attributes
         if event.name == 'replay_request':
-            kind = event.data.get('kind', 'short') if event.data else 'short'
-            self.on_replay(kind)
+            kind = event.data.get('kind', 'long') if event.data else 'long'
+            # Only handle long press replays (short press is for menu)
+            if kind == 'long':
+                self.on_replay(kind)
     
     def on_replay(self, kind='short'):
         """
