@@ -1,35 +1,62 @@
-# AGENTS.md: AI Collaboration Guide
+# AGENTS.MD: AI Collaboration Guide for Foos
 
-This document provides essential context for AI models interacting with this project. Adhering to these guidelines will ensure consistency and maintain code quality.
+**Last Updated:** November 2025  
+**Hardware:** Raspberry Pi 4 Model B Rev 1.1  
+**OS:** Debian GNU/Linux 13 (trixie)  
+**Python:** 3.13.5  
+**Branch:** feature/button-controls
+
+This document provides essential context for AI models interacting with this project. It includes critical local system configurations and deployment details discovered during development.
 
 ## 1. Project Overview & Purpose
 
-* **Primary Goal:** Provide an event-driven foosball scorekeeping and instant replay system that runs on a Raspberry Pi, capturing goals, managing replays, integrating with chat services, and optionally syncing with a league service. The UI is rendered with Pi3D and is optimized for kiosk-style deployment with hardware buttons and sensors.
-* **Business Domain:** Embedded multimedia application for recreational foosball tables, combining hardware control, live graphics, and media automation.
+* **Primary Goal:** Event-driven foosball scorekeeping and instant replay system that runs on a Raspberry Pi 4, capturing goals, managing replays, integrating with tournament/league services, and providing a kiosk-style 3D UI with hardware button control.
+* **Business Domain:** Embedded multimedia application for recreational foosball tables combining hardware sensors (buttons, Arduino goal detectors), live Pi3D graphics, camera-based instant replay, and LAN-based tournament sync.
+* **Current Deployment:** Raspberry Pi 4 Model B connected to local network (192.168.178.165), integrates with foos-tournament web service running on port 4567.
 
 ## 2. Core Technologies & Stack
 
-* **Languages:** Python 3 (primary application logic), C (Raspberry Pi OpenMAX replay player), Bash (setup & maintenance scripts), Arduino sketches for peripheral hardware. No Nim sources are present; treat the codebase as a Python-centric project unless a future migration introduces Nim.
-* **Frameworks & Runtimes:** Pi3D for 3D-rendered UI, Python threading/multiprocessing primitives, Raspberry Pi OpenMAX IL stack for video playback (via `bcm_host`/`ilclient`).
-* **Databases:** Uses local JSON/flat files (e.g., `league.json`) for league integration; no dedicated database service is configured.
-* **Key Libraries/Dependencies:** Pi3D, NumPy, Pillow, google-api-python-client, requests, evdev, inotify_simple, pyserial, RPi.GPIO (or compatible rpi-lgpio), Slack/HipChat clients. Shell utilities include ffmpeg/avconv, sox, and dispmanx tooling.
-* **Platforms:** Designed primarily for Raspberry Pi OS (Pi 2/3) with support for direct deployment on X11 desktops for debugging. Video subsystem assumes Raspberry Pi GPU capabilities.
-* **Package Manager:** Python dependencies managed through `pip` with `requirements.txt`; C component builds via `make` in `video/player`.
+* **Languages:** Python 3.13.5 (primary application logic), C (Raspberry Pi OpenMAX replay player), Bash (setup & maintenance scripts), Arduino sketches for peripheral hardware.
+* **Frameworks & Runtimes:** 
+  * Pi3D for OpenGL ES 3D-rendered UI (2560x1440@25fps)
+  * Python threading/multiprocessing for event bus and plugin isolation
+  * libcamera v0.5.2 for OV5647 camera module capture
+  * Raspberry Pi GPU (VideoCore) for hardware-accelerated video playback
+  * pygame 2.6.1 for input handling
+* **Databases:** Local JSON files (`league.json`, result files in `league/results/`). Syncs with foos-tournament SQLite database via HTTP API.
+* **Key Libraries/Dependencies:** 
+  * Pi3D, NumPy, Pillow (image handling)
+  * requests (HTTP API client for league sync)
+  * RPi.GPIO / rpi-lgpio (BCM GPIO pin control)
+  * libcamera-apps (camera capture to H.264)
+  * ffmpeg/avconv (video processing)
+  * evdev, inotify_simple (optional input methods)
+  * google-api-python-client (optional YouTube uploads)
+  * Slack/HipChat clients (optional notifications)
+* **Platforms:** Raspberry Pi 4 Model B (tested), Pi 2/3 compatible. X11 desktop support for debugging with `-s` scale flag.
+* **Package Manager:** `pip3` with `requirements.txt`; system packages via apt; C component builds via `make` in `video/player`.
 
 ## 3. Architectural Patterns
 
 * **Overall Architecture:** Monolithic event-driven application with a plugin architecture. A central message bus (`foos.bus.Bus`) fans events to plugins that encapsulate individual features (scorekeeping, camera, uploads, league sync, hardware IO).
 * **Directory Structure Philosophy:**
-  * `/foos`: Core Python package containing bootstrap code (`foos.py`), configuration loaders, platform detection, process helpers, and the Pi3D UI implementation under `foos/ui`.
-  * `/plugins`: Feature modules; each file exposes a `Plugin` class that subscribes to bus events and may spawn worker threads for IO.
-  * `/video`: Replay tooling, including shell scripts and a C OpenMAX player compiled with the provided `Makefile`.
-  * `/arduino`: Firmware sketches and documentation for Arduino-based goal detection hardware.
-  * `/doc`: User-facing documentation covering installation, hardware setup, UI, and troubleshooting.
-  * `/debug`: Shell helpers to simulate bus events (goal, replay, menu) without hardware.
-  * `/tools`: Developer utilities, e.g., movement detection experiments.
-  * `/img`, `/sounds`: Static assets consumed by the UI.
-  * `/check`, `/boot.sh`, `/main.sh`, `/foos.sh`, `setup-trixie.sh`: Operational scripts for environment verification, bootstrapping, and daemon-style execution.
-* **Module Organization:** Core modules live under the `foos` package with single-responsibility files (e.g., `bus.py`, `plugin_handler.py`, `clock.py`). UI code is grouped under `foos/ui`. Plugins are flat modules in `/plugins`; enabling features is driven by `config_base.plugins` overrides loaded through `foos.config`.
+  * `/foos`: Core Python package - `foos.py` (entrypoint), `bus.py` (event bus), `config.py` (overrides), `config_getter.py`, `platform.py`, `plugin_handler.py`, `process.py`, `clock.py`, `utils.py`
+  * `/foos/ui`: Pi3D GUI implementation (`ui.py`, `anim.py`, components)
+  * `/plugins`: Feature modules exposing `Plugin` classes that subscribe to bus events:
+    * **Core:** `score.py`, `game.py`, `menu.py`, `control.py`
+    * **I/O:** `io_raspberry.py` (GPIO buttons - pins 5, 17, 23, 25, 27), `io_keyboard.py`, `io_debug.py`, `buttons.py` (new 5-button handler with long-press on pin 5)
+    * **Media:** `camera.py`, `replay.py`, `replay_bridge.py`, `sound.py`
+    * **League:** `league.py`, `league_sync.py`, `stats_event_logger.py` (NEW - goal-by-goal tracking for official matches)
+    * **Optional:** `bot.py`, `slackbot.py`, `hipbot.py`, `upload.py`, `arduino.py`, `leds.py`, `motiondetector.py`, `standby.py`
+  * `/video`: Replay scripts (`run-camera.sh`, `replay.sh`, `generate-replay.sh`) and C OpenMAX player (`player/`)
+  * `/league`: Match data directory (`league.json` for match list, `results/` for completed matches, `processed/` for synced results)
+  * `/arduino`: Goal detector firmware and schematics
+  * `/doc`: Installation, hardware setup, UI guide, troubleshooting
+  * `/debug`: Event simulation scripts for testing without hardware
+  * `/tools`: Developer utilities (`detect_movement.py`, `test_stats_integration.py`, `verify_stats_setup.sh`)
+  * `/img`, `/sounds`: UI assets (backgrounds, icons, numbers, audio files)
+  * Root scripts: `check` (environment validation), `boot.sh`, `main.sh`, `foos.sh` (daemon startup), `setup-trixie.sh` (Debian 13 installer)
+* **Module Organization:** Core modules under `foos/` package, UI under `foos/ui/`, plugins as flat modules in `/plugins/`. Feature activation controlled by `config.py` overriding `config_base.py` defaults (`plugins` set, GPIO pin mappings, league URL/API key).
 
 ## 4. Coding Conventions & Style Guide
 
@@ -74,7 +101,114 @@ This document provides essential context for AI models interacting with this pro
 * **Testing:** No automated unit test suite is provided. Use the `debug/` shell scripts and mock plugins to simulate button presses and goal events for manual verification. Ensure new features integrate with the bus without regressing existing plugins.
 * **CI/CD Process:** Manual; contributors are expected to run `./check`, rebuild `video/player` when touching C code, and test the UI on target hardware or X11 before committing.
 
-## 7. Specific Instructions for AI Collaboration
+## 7. Critical Local Configuration & Deployment Notes
+
+**IMPORTANT: These are real-world deployment settings and fixes required on the actual Raspberry Pi system.**
+
+### Hardware Configuration
+* **Raspberry Pi 4 Model B Rev 1.1** running Debian GNU/Linux 13 (trixie)
+* **Display:** 2560x1440 @ 25fps (configured in `config.py`)
+* **Camera:** OV5647 module via libcamera (CSI ribbon cable)
+* **GPIO Buttons (BCM numbering):**
+  * Pin 17: yellow_plus (score +1 for yellow team)
+  * Pin 23: yellow_minus (score -1 for yellow team)
+  * Pin 27: black_plus (score +1 for black team)
+  * Pin 25: black_minus (score -1 for black team)
+  * Pin 5: OK button (short press = menu OK, **long press = instant replay**, debounce 600ms)
+* **Network:** Static/DHCP at 192.168.178.165, hostname `foosball-pi`
+
+### Required System Packages (Debian 13/trixie)
+```bash
+sudo apt-get install python3 python3-pip python3-pil python3-numpy \
+  libcamera-apps ffmpeg sox sqlite3 git \
+  libgles2-mesa-dev libegl1-mesa-dev
+```
+
+### Python Environment Setup
+```bash
+cd /home/pi/foos-project/foos
+pip3 install -r requirements.txt
+# Key packages: pi3d, pygame, RPi.GPIO/rpi-lgpio, requests, pillow
+```
+
+### Camera Configuration
+* Uses libcamera v0.5.2 with tuning file `/usr/share/libcamera/ipa/rpi/vc4/ov5647.json`
+* Camera capture runs in background via `video/run-camera.sh` (writes chunks to `/dev/shm/replay`)
+* **Important:** tmpfs must be mounted at `/dev/shm` for replay buffer (configured in `setup-trixie.sh`)
+
+### League Integration Configuration (`config.py`)
+```python
+league_url = 'http://192.168.178.165:4567/api'  # foos-tournament on same Pi
+league_apikey = 'change-me-supersecret'  # Must match foos-tournament config.yaml
+league_season = 'Season 2025'  # Must exist in foos-tournament database
+league_stats_api = False  # Set True when stats API fully implemented
+```
+
+### Game Mode Configuration
+* **League matches play to 10 goals** (configured in `config_base.py` line 23 and `league.py` lines 115, 122)
+* Game modes: `[(None, None), (3, None), (5, None), (10, None), (3, 120)]`
+  * Mode index 3 = 10 goals (used for league/tournament matches)
+  * Mode index 2 = 5 goals (free play)
+  * Mode index 1 = 3 goals (quick play)
+
+### Known Issues & Fixes Applied
+
+#### 1. Button Long-Press for Instant Replay
+* **Issue:** OK button (pin 5) previously only worked for menu navigation
+* **Fix:** Modified `plugins/buttons.py` to detect long press (>0.5s hold) and trigger `instant_replay` event
+* **Behavior:** Short press = menu OK, Long press = replay last goal
+
+#### 2. Stats Event Logger Plugin
+* **Purpose:** Track goal-by-goal timeline ONLY for official tournament matches (ignores free play)
+* **Location:** `plugins/stats_event_logger.py`
+* **Activation:** Subscribes to `start_competition` (not `menu_show`!) to avoid logging free play
+* **Data Collected:** Team scores per goal, timestamps, player IDs from league match data
+* **Upload:** Optional POST to foos-tournament `/api/matches/:id/goals` (when `league_stats_api=True`)
+* **Important:** Match must have ID from foos-tournament database to be tracked
+
+#### 3. League Match Result Format
+* **Current Format:** Single submatch with one score pair `[yellow_score, black_score]`
+* **Example:** `{"id": 1002, "results": [[4, 10]], "start": 1762209376, "end": 1762209451}`
+* **Known Limitation:** foos-tournament `result_processor.rb` expects 3 submatches (not implemented yet)
+* **Workaround:** Results written to `league/results/result_XXXX.json` but must be manually imported
+
+#### 4. League Directory Structure
+* **Must exist:** `/home/pi/foos-project/foos/league/` with subdirectories:
+  * `league.json` - match list from foos-tournament
+  * `results/` - completed match results (auto-created)
+  * `processed/` - synced results (auto-created)
+
+### Running the Application
+
+```bash
+# Start from project root
+cd /home/pi/foos-project/foos
+
+# Check environment prerequisites
+./check
+
+# Run in foreground (for debugging)
+python3 foos.py
+
+# Run with UI scaling on desktop (X11)
+python3 foos.py -s
+
+# Background daemon mode
+./foos.sh start
+./foos.sh stop
+./foos.sh restart
+```
+
+### Integration with foos-tournament
+* **Requires:** foos-tournament running on http://192.168.178.165:4567
+* **API Key:** Must match in both `foos/config.py` and `foos-tournament/config.yaml`
+* **Match Sync:**
+  * `league_sync.py` polls `/api/get_open_matches` and posts results to `/api/set_result`
+  * `stats_event_logger.py` (NEW) tracks goal timeline for analytics
+* **Match Creation:** Matches must exist in foos-tournament database AND `league.json` file
+* **See:** foos-tournament AGENTS.md for database schema and setup details
+
+## 8. Specific Instructions for AI Collaboration
 
 * **Contribution Guidelines:**
   * Follow the plugin-based architecture—prefer adding new capabilities as plugins or extensions of existing ones rather than hard-coding into the core GUI.
@@ -85,3 +219,13 @@ This document provides essential context for AI models interacting with this pro
 * **Dependencies:** Add Python packages to `requirements.txt` and note Raspberry Pi system packages in documentation or `setup-trixie.sh`. For C or shell dependencies, update `video/player/Makefile` or the relevant scripts. Run `pip3 install -r requirements.txt` locally to confirm compatibility.
 * **Commit Messages:** Existing history favors descriptive, sentence-style messages summarizing refactors. Keep messages clear about the scope (e.g., “Refactor button handling…”). Conventional Commit prefixes are not currently enforced, but concise summaries are appreciated.
 
+
+* **Event Bus Patterns:**
+  * Use `bus.subscribe_map({'event_name': handler_method}, thread=True)` for multiple events
+  * Common events: `score_changed`, `goal_event`, `win_game`, `start_competition`, `cancel_competition`, `menu_show`, `menu_hide`, `instant_replay`, `set_game_mode`, `reset_score`
+  * Emit events with `bus.notify('event_name', data_dict)`
+* **GPIO Safety:** Always use BCM pin numbering. Verify pin availability with `./check` before modifying `config.py` pin mappings
+* **League Integration:**
+  * When modifying match flow, ensure compatibility with both free play (no player data) and official matches (has player IDs and match ID)
+  * Official matches triggered by `start_competition` event (from league menu selection)
+  * Free play uses generic `set_game_mode` without player context
