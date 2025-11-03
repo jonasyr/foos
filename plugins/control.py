@@ -8,13 +8,12 @@ class Plugin(Buttons):
 
     def generateKeyMap(self):
         key_map = {}
-        for d in [down(['black_minus'], ('decrement_score', {'team': 'black'})),
-                  down(['black_plus'], ('goal_event', {'team': 'black', 'source': 'rpi'})),
-                  down(['yellow_minus'], ('decrement_score', {'team': 'yellow'})),
-                  down(['yellow_plus'], ('goal_event', {'team': 'yellow', 'source': 'rpi'})),
-                  # OK button handled in process_event (short=menu toggle, long=handled by replay_bridge)
-                  down(['black_minus', 'black_plus'], None, long=('reset_score', {})),
-                  down(['yellow_minus', 'yellow_plus'], None, long=('reset_score', {}))]:
+        # Note: long=None prevents double-trigger after long_press_delay
+        # Two-button combos (reset_score) removed - can't work with GPIO-only input
+        for d in [down(['black_minus'], ('decrement_score', {'team': 'black'}), long=None),
+                  down(['black_plus'], ('goal_event', {'team': 'black', 'source': 'rpi'}), long=None),
+                  down(['yellow_minus'], ('decrement_score', {'team': 'yellow'}), long=None),
+                  down(['yellow_plus'], ('goal_event', {'team': 'yellow', 'source': 'rpi'}), long=None)]:
             key_map.update(d)
         return key_map
 
