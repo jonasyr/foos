@@ -15,6 +15,7 @@ class Plugin(IOBase):
     def __init__(self, bus):
         self.bus = bus
         self.pin_to_name = {}  # Map GPIO pin number to logical button name
+        self.ok_button_processing = False  # Flag to prevent double-fire on OK button
         
         # Clean up any previous GPIO state
         try:
@@ -107,38 +108,52 @@ class Plugin(IOBase):
         Short press (<0.9s): trigger short replay
         Long press (≥0.9s): trigger long replay
         """
-        name = self.pin_to_name.get(channel, 'ok_button')
-        logger.info("OK button pressed (pin %d)", channel)
+        # Prevent concurrent execution (ignore if already processing)
+        if self.ok_button_processing:
+            return
         
-        # Measure press duration
-        t0 = time.monotonic()
+        self.ok_button_processing = True
         
-        # Wait for button release or timeout (max 2 seconds)
-        timeout = 2.0
-        while GPIO.input(channel) == GPIO.LOW and (time.monotonic() - t0) < timeout:
-            time.sleep(0.01)
-        
-        press_duration = time.monotonic() - t0
-        
-        # Determine replay type based on press duration
-        if press_duration >= 0.9:
-            replay_kind = 'long'
-            logger.info("Long press detected (%.2fs) - triggering long replay", press_duration)
-        else:
-            replay_kind = 'short'
-            logger.info("Short press detected (%.2fs) - triggering short replay", press_duration)
-        
-        # Emit button event
-        event_data = {
-            'source': 'rpi',
-            'btn': name,
-            'state': 'down',
-            'press_duration': press_duration
-        }
-        self.bus.notify('button_event', event_data)
-        
-        # Emit replay request
-        self.bus.notify('replay_request', {'kind': replay_kind})
+        try:
+            name = self.pin_to_name.get(channel, 'ok_button')
+            logger.info("OK button pressed (pin %d)", channel)
+            
+            # Measure press duration
+            t0 = time.monotonic()
+            
+            # Wait for button release or timeout (max 2 seconds)
+            timeout = 2.0
+            while GPIO.input(channel) == GPIO.LOW and (time.monotonic() - t0) < timeout:
+                time.sleep(0.01)
+            
+            press_duration = time.monotonic() - t0
+            
+            # Wait for button to be fully released and settle
+            time.sleep(0.15)
+            
+            # Determine replay type based on press duration
+            if press_duration >= 0.9:
+                replay_kind = 'long'
+                logger.info("Long press detected (%.2fs) - triggering long replay", press_duration)
+            else:
+                replay_kind = 'short'
+                logger.info("Short press detected (%.2fs) - triggering short replay", press_duration)
+            
+            # Emit button event
+            event_data = {
+                'source': 'rpi',
+                'btn': name,
+                'state': 'down',
+                'press_duration': press_duration
+            }
+            self.bus.notify('button_event', event_data)
+            
+            # Emit replay request
+            self.bus.notify('replay_request', {'kind': replay_kind})
+            
+        finally:
+            # Always release the lock
+            self.ok_button_processing = False
 
     def reader_thread(self):
         """GPIO events are handled via callbacks, no polling needed."""
