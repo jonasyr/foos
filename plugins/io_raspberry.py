@@ -97,15 +97,9 @@ class Plugin(IOBase):
         }
         self.bus.notify('button_event', event_data)
         
-        # Handle score changes based on button action
-        if action == 'plus':
-            # +1 buttons: trigger goal event (menu plugin will see the button_event above)
-            logger.info("Goal for team %s!", team)
-            self.bus.notify('goal_event', {'source': 'rpi', 'team': team})
-        elif action == 'minus':
-            # -1 buttons: decrement score (menu plugin will see the button_event above)
-            logger.info("Decrement score for team %s", team)
-            self.bus.notify('decrement_score', {'team': team})
+        # Let control/menu plugins decide what to do based on menu state
+        # When menu is closed: control plugin converts to goal_event/decrement_score
+        # When menu is open: menu plugin converts to menu_up/menu_down
     
     def _ok_button_callback(self, channel):
         """

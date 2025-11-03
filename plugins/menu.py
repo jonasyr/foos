@@ -7,11 +7,12 @@ class Plugin(Buttons):
 
     def generateKeyMap(self):
         key_map = {}
-        for d in [down(['black_minus'], ('menu_down', {}), ar=True),
-                  down(['yellow_minus'], ('menu_down', {}), ar=True),
-                  down(['black_plus'], ('menu_up', {}), ar=True),
-                  down(['yellow_plus'], ('menu_up', {}), ar=True),
-                  down(['ok'], ('menu_select', {})),
+        # Note: long=None prevents double-trigger (short + long after delay)
+        for d in [down(['black_minus'], ('menu_down', {}), long=None),
+                  down(['yellow_minus'], ('menu_down', {}), long=None),
+                  down(['black_plus'], ('menu_up', {}), long=None),
+                  down(['yellow_plus'], ('menu_up', {}), long=None),
+                  down(['ok'], ('menu_select', {}), long=None),
                   down(['black_minus', 'black_plus'], None, long=('menu_hide', {})),
                   down(['yellow_minus', 'yellow_plus'], None, long=('menu_hide', {}))]:
             key_map.update(d)
