@@ -1,3 +1,32 @@
+"""Default configuration values for the foosball application.
+
+This module centralizes the baseline configuration used by the runtime.  It
+contains plugin activation flags, UI behavior toggles, logging configuration and
+other constants that represent the canonical defaults for a deployment.  The
+settings defined here are intentionally simple data structures so they can be
+easily imported, overridden and serialized by other parts of the system.
+
+Typical usage example:
+
+    from config_base import game_modes, plugins
+
+    print("Enabled plugins:", ", ".join(sorted(plugins)))
+
+Attributes:
+    plugins: Names of plugins that should be auto-loaded at startup.
+    onscreen_leds_enabled: Whether virtual LEDs are drawn in the UI.
+    blank_console: If true the console output is suppressed when running the
+        UI in kiosk mode.
+    standby_timeout_secs: Seconds before the UI transitions into standby.
+    bg_change_secs: Interval between background image changes.
+    draw_bg_with_dispmanx: Whether to render the background in a dedicated
+        DispmanX layer on the Raspberry Pi GPU.
+    clock_format: Time format string displayed by the UI clock widget.
+    game_modes: Tuples describing score-to-win and timeout combinations.
+    replay_path: Filesystem path containing recorded replay chunks.
+    log: Logging configuration dictionary consumed by ``logging.config``.
+"""
+
 # basic set of plugins
 plugins = set(['score', 'game', 'sound', 'io_debug', 'menu', 'control', 'league', 'leds', 'io_evdev_keyboard'])
 

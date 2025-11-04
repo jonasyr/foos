@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Application entry point for the foosball scoreboard runtime."""
+
 __version__ = 20160814
 
 import foos.config as config
