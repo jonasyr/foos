@@ -90,10 +90,25 @@ class Plugin:
         self.current_game = state['current_game']
         self.match = state['match']
         if self.match:
+            # Read target score from match data, default to 10 for legacy matches
+            target_score = self.match.get('target_score', 10)
             self.update_players()
-            self.bus.notify("set_game_mode", {"mode": 10})
+            self.bus.notify("set_game_mode", {"mode": target_score})
 
     def update_players(self):
+        # Defensive: Check if submatches exist
+        if 'submatches' not in self.match or not self.match['submatches']:
+            logger.error("Match %d has no submatches! Cancelling.", self.match.get('id'))
+            self.bus.notify("error_message", "Invalid match data - no submatches defined")
+            self.cancel_competition({})
+            return
+            
+        if self.current_game >= len(self.match['submatches']):
+            logger.error("current_game=%d but only %d submatches", 
+                        self.current_game, len(self.match['submatches']))
+            self.cancel_competition({})
+            return
+        
         def pstring(ps):
             return "".join(["●" if p == 1 else "○" for p in ps]).ljust(3, " ")
 
@@ -114,8 +129,13 @@ class Plugin:
         self.match = data
         self.match['start'] = int(time.time())
         self.current_game = 0
+        
+        # Read target score from match data, default to 10 for legacy matches
+        target_score = self.match.get('target_score', 10)
+        logger.info("Starting match with target score: %d", target_score)
+        
         self.bus.notify("reset_score")
-        self.bus.notify("set_game_mode", {"mode": 10})
+        self.bus.notify("set_game_mode", {"mode": target_score, "timeout": None})
         self.update_players()
 
     def win_game(self, data):
