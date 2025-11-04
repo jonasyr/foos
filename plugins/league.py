@@ -195,7 +195,9 @@ class Plugin:
                     mmatches = []
                     for m in matches:
                         m['division'] = name
-                        entry = "{:<14.14} {:<14.14} {:<14.14} {:<14.14}".format(*m['players'])
+                        # Handle None/null values in player names (singles mode)
+                        players = [p if p else "" for p in m['players']]
+                        entry = "{:<14.14} {:<14.14} {:<14.14} {:<14.14}".format(*players)
                         mmatches.append((entry, q('start_competition', m)))
 
                     mmatches.append(("", None))

@@ -463,6 +463,12 @@ class Gui():
             players = ["", ""]
         if len(points) == 0:
             points = ["", ""]
+        
+        # Pad players and points to always have 2 elements (for singles mode compatibility)
+        while len(players) < 2:
+            players = players + [""]
+        while len(points) < 2:
+            points = points + [""]
 
         f = "{:<%d.%d} {}" % (l - len(points[0]), l - len(points[0]))
         p0 = f.format(players[0], points[0])
