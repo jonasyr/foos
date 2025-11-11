@@ -118,7 +118,10 @@ class OutlineFont(Texture):
       except TypeError:
         ch = i
 
-      chwidth, chheight = imgfont.getsize(ch)
+      # Use getbbox() for Pillow 10.0+ compatibility (getsize() was removed)
+      bbox = imgfont.getbbox(ch)
+      chwidth = bbox[2] - bbox[0]  # right - left
+      chheight = bbox[3] - bbox[1]  # bottom - top
       chwidth += s_inc
       chheight += s_inc
 

@@ -119,6 +119,55 @@ pip3 install -r requirements.txt
 
 * Reboot and run check again to see if everything is working as expected :D
 
+### Raspberry Pi 4 Specific Setup
+
+**Important:** Raspberry Pi 4 uses a different GPU (VideoCore VI) and doesn't support the OpenMAX IL player used on Pi 0-3. Instead, hardware-accelerated video overlay is achieved using MPV with KMS/DRM planes.
+
+#### Install MPV with DRM Support
+
+```bash
+sudo apt-get update
+sudo apt-get install mpv
+```
+
+#### Verify DRM Support
+
+```bash
+# Check that MPV has DRM backend available
+mpv --vo=help | grep -E "gpu|drm"
+# Expected: Output should include "gpu" with "drm" context
+
+# Verify KMS is enabled in boot config
+grep -i vc4-kms /boot/firmware/config.txt
+# Expected: dtoverlay=vc4-kms-v3d
+```
+
+#### Enable KMS if Not Already Active
+
+If KMS is not enabled, add it to your boot configuration:
+
+```bash
+sudo nano /boot/firmware/config.txt
+
+# Add or verify these lines:
+dtoverlay=vc4-kms-v3d
+dtparam=audio=on
+
+# Save and reboot
+sudo reboot
+```
+
+#### How It Works
+
+- **Video layer (overlay plane):** MPV plays replay videos on hardware layer 0
+- **UI layer (primary plane):** Pi3D renders the score counters and UI on layer 1
+- **GPU compositor:** Automatically blends both layers, so UI appears on top of video
+- **Result:** During replays, score counters shrink to top-right corner and remain visible
+
+#### Troubleshooting
+
+If replay videos cover the entire screen instead of showing UI overlay, see `doc/Troubleshooting.md` for diagnostic steps.
+
 ### Configure your foos installation
 
 Foos uses a set of plugins to configure what features are enabled.

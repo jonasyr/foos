@@ -18,6 +18,11 @@ logging.config.dictConfig(config.log)
 logger = logging.getLogger(__name__)
 logger.info("Foos v%s starting", __version__)
 
+# Set DISPLAY for SSH access - required for pi3d OpenGL context
+if 'DISPLAY' not in os.environ:
+    os.environ['DISPLAY'] = ':0'
+    logger.info("DISPLAY not set, using :0")
+
 try:
     opts, args = getopt.getopt(sys.argv[1:], "s:f:")
 except getopt.GetoptError:
