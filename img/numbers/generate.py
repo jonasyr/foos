@@ -14,7 +14,10 @@ def makeImage(string):
     else:
       font = ImageFont.truetype(f, 480)
 
-    sx, sy = font.getsize(string)
+    # Use getbbox() for Pillow 10.0+ compatibility (getsize() was removed)
+    bbox = font.getbbox(string)
+    sx = bbox[2] - bbox[0]  # width = right - left
+    sy = bbox[3] - bbox[1]  # height = bottom - top
     #sy for ubuntumono seems to be off
     fsy = sy * 0.77
     posx = 256 - sx / 2
