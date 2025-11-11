@@ -302,7 +302,7 @@ class Gui():
             #adapt to screen size
             # CRITICAL: layer=1 ensures Pi3D renders ABOVE video overlay (layer 0)
             # This enables the overlay_mode UI where score counters appear on top of replay videos
-            self.DISPLAY = pi3d.Display.create(background=bgcolor, layer=1, use_pygame=True)
+            self.DISPLAY = pi3d.Display.create(background=bgcolor, layer=1)
             sf = self.width / self.DISPLAY.width
             self.height = self.DISPLAY.height * sf
         else:
@@ -311,7 +311,7 @@ class Gui():
             # CRITICAL: layer=1 ensures Pi3D renders ABOVE video overlay (layer 0)
             # This enables the overlay_mode UI where score counters appear on top of replay videos
             self.DISPLAY = pi3d.Display.create(x=0, y=0, w=int(self.width / sf), h=int(self.height / sf),
-                                               background=bgcolor, layer=1, use_pygame=True)
+                                               background=bgcolor, layer=1)
 
         self.DISPLAY.frames_per_second = fps
         logger.info("Display %dx%d@%d", self.DISPLAY.width, self.DISPLAY.height, self.DISPLAY.frames_per_second)
