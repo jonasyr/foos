@@ -1,115 +1,169 @@
 import time
 import logging
-import ctypes
-import time
 import RPi.GPIO as GPIO
 from .io_base import IOBase
 import foos.config as config
-import foos.process as process
 
 logger = logging.getLogger(__name__)
 
-#The button should be connected to GND
-class Button:
-    def __init__(self, bus, pin_number, name, debounce_time_ms = 20):
-        self.pin = pin_number
-        self.name = name
-        self.bus = bus
-        if self.pin:
-            GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-            GPIO.add_event_detect(self.pin, GPIO.BOTH, callback = self.button_changed, bouncetime = debounce_time_ms)
-            self.button_state = GPIO.input(self.pin)
-        else:
-            logger.warn("Cannot init button {0}, pin not specified".format(self.name))
-        
-    def button_changed(self, channel):
-        input = GPIO.input(self.pin)
-        if input == self.button_state:
-            return;
-        self.button_state = input
-        logger.info("{0} button changed to {1}!".format(self.name, input));
-        event_data = {'source': 'rpi', 'btn': self.name, 'state': 'up' if input else 'down'}
-        if event_data:
-            self.bus.notify('button_event', event_data)
-
-    def __del__(self):
-        if self.pin:
-            GPIO.remove_event_detect(self.pin)
-
-class GoalDetector:
-    def __init__(self, bus, pin_number, team):
-        self.bus = bus
-        self.pin = pin_number
-        self.team = team
-        if self.pin:
-            #GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_DOWN)
-            GPIO.setup(self.pin, GPIO.IN, pull_up_down = GPIO.PUD_UP)
-            GPIO.add_event_detect(self.pin, GPIO.FALLING, callback=self.on_goal, bouncetime=10)
-        else:
-            logger.warn("Cannot init GoalDetector {0}, pin not specified".format(self.team))
-    def __del__(self):
-        if self.pin:
-            GPIO.remove_event_detect(self.pin)
-            
-    def on_goal(self, channel):
-        logger.info("Goal {}!".format(self.team))
-        self.bus.notify('goal_event', {'source': 'rpi', 'team': self.team})
-
-class IRBarrierPwmGenerator:
-    def __init__(self):
-        
-        # https://sites.google.com/site/semilleroadt/raspberry-pi-tutorials/gpio:
-        # "According to it, configure GPIO18 (WiringPi Pin 1)..."
-
-        # Raspberry base PWM frequency: 19,200,000 Hz
-        # Resulted frequency: base freq / 101 / 5 = 38.019 kHz
-        # Signal duty cycle = 3/5 = ~60%
-        process.call_and_log("gpio mode 1 pwm && gpio pwm-ms && gpio pwmr 5 && gpio pwmc 101 && gpio pwm 1 2", shell=True)
-        
-    def __del__(self):
-        process.call_and_log("gpio pwm 1 0", shell=True)
-  
 class Plugin(IOBase):
+    """
+    5-button GPIO input plugin for Raspberry Pi.
+    All buttons are active-low (connect to GND) with internal pull-ups.
+    """
+    
     def __init__(self, bus):
-        GPIO.setmode(GPIO.BOARD)
+        self.bus = bus
+        self.pin_to_name = {}  # Map GPIO pin number to logical button name
+        self.ok_button_processing = False  # Flag to prevent double-fire on OK button
         
-        self.goal_pin_black = config.io_raspberry_pins["irbarrier_team_black"]
-        self.goal_pin_yellow = config.io_raspberry_pins["irbarrier_team_yellow"]
-
-        self.ok_button_pin = config.io_raspberry_pins["ok_button"]
- 
-        self.yellow_plus_pin = config.io_raspberry_pins["yellow_plus"]
-        self.yellow_minus_pin = config.io_raspberry_pins["yellow_minus"]
-
-        self.black_plus_pin = config.io_raspberry_pins["black_plus"]
-        self.black_minus_pin = config.io_raspberry_pins["black_minus"]
+        # Clean up any previous GPIO state
+        try:
+            GPIO.setmode(GPIO.BCM)
+            # Remove any existing event detection on our pins
+            for pin in config.io_raspberry_pins.values():
+                try:
+                    GPIO.remove_event_detect(pin)
+                except:
+                    pass
+        except:
+            pass
         
-        self.ir_barrier_pwm = IRBarrierPwmGenerator()
-
-        time.sleep(0.5)   # let the PWM really start before starting detectors
-            
-        self.goal_detector_black = GoalDetector(bus, self.goal_pin_black, "black")
-        self.goal_detector_yellow = GoalDetector(bus, self.goal_pin_yellow, "yellow")
-
-        self.yellow_plus_button = Button(bus, self.yellow_plus_pin, 'yellow_plus')
-        self.yellow_minus_button = Button(bus, self.yellow_minus_pin, 'yellow_minus')
+        # Set BCM numbering mode
+        GPIO.setmode(GPIO.BCM)
         
-        self.black_plus_button = Button(bus, self.black_plus_pin, 'black_plus')
-        self.black_minus_button = Button(bus, self.black_minus_pin, 'black_minus')
-
-        self.ok_button = Button(bus, self.ok_button_pin, 'ok')
-            
+        # Setup all GPIO pins with pull-ups
+        for name, pin in config.io_raspberry_pins.items():
+            GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
+            self.pin_to_name[pin] = name
+            logger.info("GPIO setup: %s on pin %d (BCM)", name, pin)
+        
+        # Register +/- buttons with standard debounce (300ms)
+        for name, pin in config.io_raspberry_pins.items():
+            if name.endswith('_plus') or name.endswith('_minus'):
+                try:
+                    GPIO.add_event_detect(pin, GPIO.FALLING, 
+                                        callback=self._score_button_callback, 
+                                        bouncetime=300)
+                    logger.info("Registered score button: %s (pin %d, debounce 300ms)", name, pin)
+                except RuntimeError as e:
+                    # This shouldn't happen after cleanup, but log and re-raise
+                    logger.error("Failed to register pin %d (%s): %s", pin, name, e)
+                    raise
+        
+        # Register OK button with long-press detection (600ms debounce)
+        ok_pin = config.io_raspberry_pins['ok_button']
+        try:
+            GPIO.add_event_detect(ok_pin, GPIO.FALLING, 
+                                callback=self._ok_button_callback, 
+                                bouncetime=600)
+            logger.info("Registered OK button: pin %d (debounce 600ms, long-press enabled)", ok_pin)
+        except RuntimeError as e:
+            # This shouldn't happen after cleanup, but log and re-raise
+            logger.error("Failed to register OK button pin %d: %s", ok_pin, e)
+            raise
+        
         super().__init__(bus)
+    
+    def _score_button_callback(self, channel):
+        """
+        Handle +/- button presses.
+        Maps GPIO pin to button name and emits appropriate bus events.
+        """
+        name = self.pin_to_name.get(channel)
+        if not name:
+            logger.warning("Unknown GPIO pin %d triggered", channel)
+            return
+        
+        logger.info("Button pressed: %s (pin %d)", name, channel)
+        
+        # Parse button name to determine team and action
+        # Format: "yellow_plus", "yellow_minus", "black_plus", "black_minus"
+        parts = name.split('_')
+        if len(parts) != 2:
+            logger.warning("Invalid button name format: %s", name)
+            return
+        
+        team = parts[0]  # "yellow" or "black"
+        action = parts[1]  # "plus" or "minus"
+        
+        # Emit button event for general handling
+        event_data = {
+            'source': 'rpi',
+            'btn': name,
+            'state': 'down',
+            'team': team,
+            'action': action
+        }
+        self.bus.notify('button_event', event_data)
+        
+        # Let control/menu plugins decide what to do based on menu state
+        # When menu is closed: control plugin converts to goal_event/decrement_score
+        # When menu is open: menu plugin converts to menu_up/menu_down
+    
+    def _ok_button_callback(self, channel):
+        """
+        Handle OK button with long-press detection.
+        Short press (<0.9s): Menu select/toggle
+        Long press (≥0.9s): Trigger long replay
+        """
+        # Prevent concurrent execution (ignore if already processing)
+        if self.ok_button_processing:
+            return
+        
+        self.ok_button_processing = True
+        
+        try:
+            name = self.pin_to_name.get(channel, 'ok_button')
+            logger.info("OK button pressed (pin %d)", channel)
+            
+            # Measure press duration
+            t0 = time.monotonic()
+            
+            # Wait for button release or timeout (max 2 seconds)
+            timeout = 2.0
+            while GPIO.input(channel) == GPIO.LOW and (time.monotonic() - t0) < timeout:
+                time.sleep(0.01)
+            
+            press_duration = time.monotonic() - t0
+            
+            # Wait for button to be fully released and settle
+            time.sleep(0.15)
+            
+            # Determine action based on press duration
+            if press_duration >= 0.9:
+                # Long press: trigger replay
+                logger.info("Long press detected (%.2fs) - triggering long replay", press_duration)
+                self.bus.notify('replay_request', {'kind': 'long'})
+            else:
+                # Short press: menu OK button (select/toggle menu)
+                logger.info("Short press detected (%.2fs) - menu OK", press_duration)
+                self.bus.notify('button_event', {'source': 'rpi', 'btn': 'ok', 'state': 'down'})
+            
+        finally:
+            # Always release the lock
+            self.ok_button_processing = False
 
     def reader_thread(self):
+        """GPIO events are handled via callbacks, no polling needed."""
         while True:
-            #Do nothing for now
             time.sleep(1)
-            
+    
     def writer_thread(self):
+        """No GPIO output needed for button-only input."""
         while True:
             line = self.write_queue.get()
-            #Do nothing for now
             time.sleep(1)
-
-        
+    
+    def __del__(self):
+        """Cleanup GPIO resources on plugin shutdown."""
+        try:
+            # Remove all event detection
+            for pin in config.io_raspberry_pins.values():
+                try:
+                    GPIO.remove_event_detect(pin)
+                except:
+                    pass
+            logger.info("GPIO cleanup completed")
+        except:
+            pass

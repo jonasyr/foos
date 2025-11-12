@@ -7,13 +7,14 @@ class Plugin(Buttons):
 
     def generateKeyMap(self):
         key_map = {}
-        for d in [down(['black_minus'], ('menu_down', {}), ar=True),
-                  down(['yellow_minus'], ('menu_down', {}), ar=True),
-                  down(['black_plus'], ('menu_up', {}), ar=True),
-                  down(['yellow_plus'], ('menu_up', {}), ar=True),
-                  down(['ok'], ('menu_select', {})),
-                  down(['black_minus', 'black_plus'], None, long=('menu_hide', {})),
-                  down(['yellow_minus', 'yellow_plus'], None, long=('menu_hide', {}))]:
+        # Note: long=None prevents double-trigger (short + long after delay)
+        # Two-button combos (menu_hide) removed - can't work with GPIO-only input
+        # Menu closes via "Back" option or short OK press when already open
+        for d in [down(['black_minus'], ('menu_down', {}), long=None),
+                  down(['yellow_minus'], ('menu_down', {}), long=None),
+                  down(['black_plus'], ('menu_up', {}), long=None),
+                  down(['yellow_plus'], ('menu_up', {}), long=None),
+                  down(['ok'], ('menu_select', {}), long=None)]:
             key_map.update(d)
 
         return key_map

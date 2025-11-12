@@ -2,27 +2,32 @@ import time
 import queue
 from threading import Thread
 
+# Sentinel value to distinguish "not provided" from "explicitly None"
+_DEFAULT = object()
+
 
 def key(btns, state, duration, ev, ar):
     return {(frozenset(btns), state, duration): (ev, ar)}
 
 
-def press(btns, state, short, long=None, ar=False):
+def press(btns, state, short, long=_DEFAULT, ar=False):
     s = {}
     if short:
         s.update(key(btns, state, 'short', short, ar))
-    if not long:
+    # If long not specified, default to short. If long=None explicitly, skip long press
+    if long is _DEFAULT:
         long = short
-    s.update(key(btns, state, 'long', long, ar))
+    if long is not None:
+        s.update(key(btns, state, 'long', long, ar))
 
     return s
 
 
-def up(btns, short, long=None):
+def up(btns, short, long=_DEFAULT):
     return press(btns, 'up', short, long, False)
 
 
-def down(btns, short, long=None, ar=False):
+def down(btns, short, long=_DEFAULT, ar=False):
     return press(btns, 'down', short, long, ar)
 
 
@@ -103,6 +108,9 @@ class Buttons:
             # reset duration
             self.press = 'short'
             self.checkState(state)
+            # For GPIO buttons (no UP event), clear state immediately to prevent accumulation
+            if ev.data.get('source') == 'rpi':
+                self.clearState()
 
         elif state == 'up':
             if button in self.buttons:

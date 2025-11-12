@@ -82,7 +82,9 @@ class FixedOutlineString(Texture):
     nlines = len(lines)
     maxwid = 0
     for l in lines:
-      line_wid = imgfont.getsize(l)[0]
+      # Use getbbox() instead of deprecated getsize()
+      bbox = imgfont.getbbox(l)
+      line_wid = bbox[2] - bbox[0]
       if line_wid > maxwid:
         maxwid = line_wid
     maxwid += 2.0 * margin
@@ -99,7 +101,9 @@ class FixedOutlineString(Texture):
     self.ix, self.iy = texture_wid, texture_hgt
     draw = ImageDraw.Draw(self.im)
     for i, line in enumerate(lines):
-      line_len = imgfont.getsize(line)[0]
+      # Use getbbox() instead of deprecated getsize()
+      bbox = imgfont.getbbox(line)
+      line_len = bbox[2] - bbox[0]
       if justify == "C":
         xoff = (maxwid - line_len) / 2.0
       elif justify == "L":

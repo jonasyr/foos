@@ -300,14 +300,14 @@ class Gui():
         self.width = 1920
         if sf == 0:
             #adapt to screen size
-            self.DISPLAY = pi3d.Display.create(background=bgcolor, layer=1, use_pygame=True)
+            self.DISPLAY = pi3d.Display.create(background=bgcolor, layer=1)
             sf = self.width / self.DISPLAY.width
             self.height = self.DISPLAY.height * sf
         else:
             logger.debug("Forcing size")
             self.height = 1080
             self.DISPLAY = pi3d.Display.create(x=0, y=0, w=int(self.width / sf), h=int(self.height / sf),
-                                               background=bgcolor, layer=1, use_pygame=True)
+                                               background=bgcolor, layer=1)
 
         self.DISPLAY.frames_per_second = fps
         logger.info("Display %dx%d@%d", self.DISPLAY.width, self.DISPLAY.height, self.DISPLAY.frames_per_second)
@@ -463,6 +463,12 @@ class Gui():
             players = ["", ""]
         if len(points) == 0:
             points = ["", ""]
+        
+        # Pad players and points to always have 2 elements (for singles mode compatibility)
+        while len(players) < 2:
+            players = players + [""]
+        while len(points) < 2:
+            points = points + [""]
 
         f = "{:<%d.%d} {}" % (l - len(points[0]), l - len(points[0]))
         p0 = f.format(players[0], points[0])

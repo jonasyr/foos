@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+"""Application entry point for the foosball scoreboard runtime."""
+
 __version__ = 20160814
 
 import foos.config as config
@@ -7,6 +9,10 @@ import logging.config
 import sys
 import getopt
 import os
+
+# Ensure DISPLAY is set for pi3d (EGL/OpenGL context creation)
+if 'DISPLAY' not in os.environ:
+    os.environ['DISPLAY'] = ':0'
 
 from foos.platform import is_x11
 from foos.ui import ui
